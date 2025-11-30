@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { analyzeImage, lookupBarcode } from '../services/geminiService';
-import { InventoryItem, ScanResult, Category, Unit } from '../types';
+import { InventoryItem } from '../types';
 
 // Declare global html5-qrcode type since it's loaded via CDN
 declare class Html5QrcodeScanner {
@@ -19,55 +19,70 @@ const Scanner: React.FC<Props> = ({ onItemsIdentified, onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<any>(null); // To store Html5QrcodeScanner instance
+  const scannerRef = useRef<any>(null);
 
   useEffect(() => {
-    if (mode === 'barcode') {
-      const startScanner = () => {
-        const scanner = new Html5QrcodeScanner(
-          "reader",
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          false
-        );
-        scannerRef.current = scanner;
-        
-        scanner.render(
-          async (decodedText) => {
-            // Pause/Clear scanner on success to prevent multiple reads
-            scanner.clear();
-            setIsAnalyzing(true);
-            try {
-               const item = await lookupBarcode(decodedText);
-               if (item) {
-                 // Remove ID/AddedDate/Source as parent handles that
-                 const { id, addedDate, source, ...rest } = item;
-                 onItemsIdentified([rest]);
-               } else {
-                 setError(`Kunde inte hitta vara för streckkod: ${decodedText}. Lägg till manuellt.`);
-                 // Fallback: Just let user add it manually or try photo
-               }
-            } catch (err) {
-               setError("Fel vid uppslagning av streckkod.");
-            } finally {
-               setIsAnalyzing(false);
-            }
-          },
-          (errorMessage) => {
-            // ignore scan errors, they happen every frame
-          }
-        );
-      };
-      
-      // Short delay to ensure DOM is ready
-      setTimeout(startScanner, 100);
-    }
+    let mounted = true;
 
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch((err: any) => console.error("Failed to clear scanner", err));
-        scannerRef.current = null;
-      }
-    };
+    if (mode === 'barcode') {
+      // Small delay to ensure DOM is ready and previous cleanup is done
+      const timer = setTimeout(() => {
+        if (!mounted) return;
+
+        // Ensure element exists before creating scanner
+        if (!document.getElementById("reader")) return;
+
+        try {
+          const scanner = new Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            false
+          );
+          scannerRef.current = scanner;
+          
+          scanner.render(
+            async (decodedText: string) => {
+              // Pause/Clear scanner on success to prevent multiple reads
+              if (scannerRef.current) {
+                await scannerRef.current.clear();
+                scannerRef.current = null;
+              }
+              
+              setIsAnalyzing(true);
+              try {
+                 const item = await lookupBarcode(decodedText);
+                 if (item) {
+                   // Remove ID/AddedDate/Source as parent handles that
+                   const { id, addedDate, source, ...rest } = item;
+                   onItemsIdentified([rest]);
+                 } else {
+                   setError(`Kunde inte hitta vara för streckkod: ${decodedText}. Lägg till manuellt.`);
+                   // We don't close automatically here, allowing user to see error or switch mode
+                 }
+              } catch (err) {
+                 setError("Fel vid uppslagning av streckkod.");
+              } finally {
+                 setIsAnalyzing(false);
+              }
+            },
+            (errorMessage: any) => {
+              // ignore scan errors, they happen every frame
+            }
+          );
+        } catch (e) {
+          console.error("Scanner initialization failed", e);
+        }
+      }, 100);
+
+      return () => {
+        mounted = false;
+        clearTimeout(timer);
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch((err: any) => console.error("Failed to clear scanner", err));
+          scannerRef.current = null;
+        }
+      };
+    }
   }, [mode, onItemsIdentified]);
 
 

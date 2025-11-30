@@ -206,7 +206,6 @@ export const lookupBarcode = async (barcode: string): Promise<InventoryItem | nu
       let quantity = 1;
       let unit = Unit.ST;
       if (product.quantity) {
-        // Very basic parsing, OpenFoodFacts quantity strings are messy
         const qStr = product.quantity.toLowerCase();
         if (qStr.includes('kg')) { quantity = parseFloat(qStr); unit = Unit.KG; }
         else if (qStr.includes('g')) { quantity = parseFloat(qStr); unit = Unit.G; }
