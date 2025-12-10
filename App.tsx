@@ -6,83 +6,215 @@ import CookingView from './components/CookingView';
 import StatsView from './components/StatsView';
 import RecipeView from './components/RecipeView';
 import { InventoryItem, ConsumptionLog, DeductionSuggestion } from './types';
-
-// Mock initial data
-const INITIAL_INVENTORY: InventoryItem[] = [
-  { id: '1', name: 'Mjölk', quantity: 1, unit: 'l', category: 'Mejeri', expiryDate: '2023-11-20', addedDate: '2023-11-01', source: 'manual', priceInfo: 15 },
-  { id: '2', name: 'Pasta', quantity: 500, unit: 'g', category: 'Skafferi', expiryDate: '2025-01-01', addedDate: '2023-10-01', source: 'manual', priceInfo: 20 },
-];
+import { supabase } from './services/supabaseClient';
+import { useSupabaseSession } from './hooks/useSupabaseSession';
+import { useInventory } from './hooks/useInventory';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'cook' | 'stats' | 'recipes'>('inventory');
   const [showScanner, setShowScanner] = useState(false);
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => {
-    const saved = localStorage.getItem('inventory');
-    return saved ? JSON.parse(saved) : INITIAL_INVENTORY;
-  });
   const [logs, setLogs] = useState<ConsumptionLog[]>(() => {
     const saved = localStorage.getItem('logs');
     return saved ? JSON.parse(saved) : [];
   });
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isSendingLink, setIsSendingLink] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem('inventory', JSON.stringify(inventory));
-  }, [inventory]);
+  const { session, initializing } = useSupabaseSession();
+  const userId = session?.user?.id ?? null;
+  const {
+    items: inventory,
+    loading: inventoryLoading,
+    error: inventoryError,
+    refresh: refreshInventory
+  } = useInventory(userId);
 
   useEffect(() => {
     localStorage.setItem('logs', JSON.stringify(logs));
   }, [logs]);
 
-  const handleItemsIdentified = (newItems: Omit<InventoryItem, 'id' | 'addedDate' | 'source'>[]) => {
-    const itemsToAdd: InventoryItem[] = newItems.map(item => ({
-      ...item,
-      id: uuidv4(),
-      addedDate: new Date().toISOString(),
-      source: 'scan'
-    }));
-    setInventory(prev => [...prev, ...itemsToAdd]);
-    setShowScanner(false);
-  };
+  const handleEmailLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoginError(null);
+    setLoginMessage(null);
 
-  const handleRemoveItem = (id: string) => {
-    setInventory(prev => prev.filter(item => item.id !== id));
-  };
+    if (!email) {
+      setLoginError('Fyll i en e-postadress.');
+      return;
+    }
 
-  const handleDeduction = (suggestions: DeductionSuggestion[], dishName: string) => {
-    const newLogs: ConsumptionLog[] = [];
-    const updatedInventory = inventory.map(item => {
-      const suggestion = suggestions.find(s => s.itemId === item.id);
-      if (suggestion) {
-        // Calculate cost of used portion
-        let costUsed = 0;
-        if (item.priceInfo) {
-          const ratio = suggestion.deductAmount / item.quantity;
-          costUsed = item.priceInfo * ratio;
-        }
-
-        newLogs.push({
-          id: uuidv4(),
-          date: new Date().toISOString(),
-          itemName: item.name,
-          cost: costUsed,
-          quantityUsed: suggestion.deductAmount,
-          reason: 'cooked',
-          dishName: dishName
-        });
-
-        const newQty = item.quantity - suggestion.deductAmount;
-        return { ...item, quantity: Math.max(0, newQty) };
+    setIsSendingLink(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin
       }
-      return item;
-    }).filter(item => item.quantity > 0); // Remove items if quantity is 0 (optional design choice)
+    });
+    setIsSendingLink(false);
 
-    setInventory(updatedInventory);
+    if (error) {
+      setLoginError(error.message);
+    } else {
+      setLoginMessage('Kolla din inkorg för en magisk inloggningslänk.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleItemsIdentified = async (
+    newItems: Omit<InventoryItem, 'id' | 'addedDate' | 'source'>[]
+  ) => {
+    if (!userId) {
+      setGlobalError('Du måste vara inloggad för att lägga till varor.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const itemsToInsert = newItems.map(item => ({
+      user_id: userId,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      category: item.category,
+      expiry_date: item.expiryDate || null,
+      price_info: item.priceInfo ?? null,
+      added_at: now,
+      source: 'scan' as const
+    }));
+
+    const { error } = await supabase.from('inventory_items').insert(itemsToInsert);
+    if (error) {
+      setGlobalError(error.message);
+    } else {
+      setGlobalError(null);
+      await refreshInventory();
+      setShowScanner(false);
+    }
+  };
+
+  const handleRemoveItem = async (id: string) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from('inventory_items')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId);
+
+    if (error) {
+      setGlobalError(error.message);
+    } else {
+      setGlobalError(null);
+      await refreshInventory();
+    }
+  };
+
+  const handleDeduction = async (suggestions: DeductionSuggestion[], dishName: string) => {
+    if (!userId) return;
+
+    const newLogs: ConsumptionLog[] = [];
+
+    for (const suggestion of suggestions) {
+      const item = inventory.find(i => i.id === suggestion.itemId);
+      if (!item) continue;
+
+      let costUsed = 0;
+      if (item.priceInfo) {
+        const ratio = suggestion.deductAmount / item.quantity;
+        costUsed = item.priceInfo * ratio;
+      }
+
+      newLogs.push({
+        id: uuidv4(),
+        date: new Date().toISOString(),
+        itemName: item.name,
+        cost: costUsed,
+        quantityUsed: suggestion.deductAmount,
+        reason: 'cooked',
+        dishName
+      });
+
+      const newQty = item.quantity - suggestion.deductAmount;
+      if (newQty <= 0) {
+        const { error } = await supabase
+          .from('inventory_items')
+          .delete()
+          .eq('id', item.id)
+          .eq('user_id', userId);
+        if (error) {
+          setGlobalError(error.message);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from('inventory_items')
+          .update({
+            quantity: newQty,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.id)
+          .eq('user_id', userId);
+        if (error) {
+          setGlobalError(error.message);
+          return;
+        }
+      }
+    }
+
+    setGlobalError(null);
+    await refreshInventory();
     setLogs(prev => [...prev, ...newLogs]);
-    setActiveTab('inventory'); // Go back to inventory to see changes
+    setActiveTab('inventory');
   };
 
   // Calculate total inventory value
   const inventoryValue = inventory.reduce((sum, item) => sum + (item.priceInfo || 0), 0);
+
+  if (initializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600">
+        <span>Laddar...</span>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-sm bg-white shadow-lg rounded-2xl p-6 space-y-4">
+          <h1 className="text-xl font-semibold text-gray-800">Logga in</h1>
+          <p className="text-sm text-gray-500">Skriv din e-postadress så skickar vi en magisk länk.</p>
+          <form className="space-y-3" onSubmit={handleEmailLogin}>
+            <label className="block text-sm font-medium text-gray-700">
+              E-post
+              <input
+                type="email"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                placeholder="namn@example.com"
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={isSendingLink}
+              className="w-full rounded-md bg-emerald-600 py-2 text-white font-semibold hover:bg-emerald-500 disabled:opacity-60"
+            >
+              {isSendingLink ? 'Skickar...' : 'Skicka magisk länk'}
+            </button>
+          </form>
+          {loginMessage && <p className="text-sm text-emerald-600">{loginMessage}</p>}
+          {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
@@ -92,6 +224,15 @@ const App: React.FC = () => {
           <div>
             <h1 className="text-xl font-bold tracking-tight">MatSmart Lager</h1>
             <p className="text-emerald-100 text-sm">Du har {inventory.length} varor hemma</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-100 text-xs sm:text-sm">{session.user?.email}</span>
+            <button
+              onClick={handleSignOut}
+              className="bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-full"
+            >
+              Logga ut
+            </button>
           </div>
           <button
             onClick={() => setShowScanner(true)}
@@ -106,17 +247,35 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto min-h-[80vh]">
-        {activeTab === 'inventory' && (
-          <InventoryView items={inventory} onRemove={handleRemoveItem} />
+        {globalError && (
+          <div className="mx-4 my-3 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {globalError}
+          </div>
         )}
-        {activeTab === 'recipes' && (
-          <RecipeView inventory={inventory} />
+        {inventoryError && (
+          <div className="mx-4 my-3 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {inventoryError}
+          </div>
         )}
-        {activeTab === 'cook' && (
-          <CookingView inventory={inventory} onConfirmDeduction={handleDeduction} />
-        )}
-        {activeTab === 'stats' && (
-          <StatsView logs={logs} inventoryValue={inventoryValue} />
+        {inventoryLoading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500">
+            Hämtar lagret...
+          </div>
+        ) : (
+          <>
+            {activeTab === 'inventory' && (
+              <InventoryView items={inventory} onRemove={handleRemoveItem} />
+            )}
+            {activeTab === 'recipes' && (
+              <RecipeView inventory={inventory} />
+            )}
+            {activeTab === 'cook' && (
+              <CookingView inventory={inventory} onConfirmDeduction={handleDeduction} />
+            )}
+            {activeTab === 'stats' && (
+              <StatsView logs={logs} inventoryValue={inventoryValue} />
+            )}
+          </>
         )}
       </main>
 

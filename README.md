@@ -49,6 +49,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
     );
     ```
   - Använd Supabase Row Level Security + policies för att begränsa data per användare.
+   - Slå på Row Level Security för varje tabell:
+      1. Gå till Table editor → välj tabell → "Row Level Security" → slå på.
+      2. Klicka "Add policy" → välj Template "Enable read access for authenticated users" och ersätt villkoret med `auth.uid() = user_id`.
+      3. Skapa separata policies för SELECT, INSERT, UPDATE, DELETE.
 
 - **Autentisering UI – Supabase Auth UI eller Clerk (gratis nivå)**
   - Supabase: `npm install @supabase/auth-ui-react`, rendera `<Auth>`-komponent och lyssna på `supabase.auth.onAuthStateChange`.
