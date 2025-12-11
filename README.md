@@ -19,6 +19,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 3. Run the app:
    `npm run dev`
 
+## Status och nyliga ändringar
+
+- Projektet är nu flyttat så allt ligger direkt i `mat_lager/` (inga underkataloger behövs).
+- Supabase används för backend: tabeller och RLS-polices ligger på plats, och appen laddar inventariet via Supabase Realtime.
+- En enkel e-post/magic-link-inloggning är aktiverad (Supabase Auth). Inloggning krävs för att lägga till/ta bort varor.
+- `Scanner` + “lägg till vara” och borttagning uppdaterar nu Supabase `inventory_items` i stället för `localStorage`.
+- Gamla `localStorage`-mockar har plockats bort utom för konsumtionsloggar (som migreras i nästa steg).
+
 ## Rekommenderade molntjänster och setup
 
 - **Frontend-hosting – Vercel (gratisnivå)**
@@ -35,7 +43,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - **Databas + Auth – Supabase (gratisnivå)**
   - Skapa projekt på https://supabase.com, välj region nära dig.
   - Aktivera Email + Magic Link auth.
-  - Skapa tabeller: `inventory_items`, `consumption_logs`, `recipes`, `meal_plan`, `shopping_list`, `offers` (se TODO nedan för schema).
+   - Skapa tabeller: `inventory_items`, `cooking_sessions`, `cooking_session_items`, `consumption_logs`, `recipes`, `recipe_ingredients`, `meal_plan`, `shopping_list`, `shopping_list_items`, `profiles` (SQL-block finns i repo). 
   - I Supabase dashboard -> Project Settings -> API: kopiera `SUPABASE_URL` och `SUPABASE_ANON_KEY`.
    - Lägg env-variabler i Vercel (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) och i lokal `.env.local`.
   - Installera klient: `npm install @supabase/supabase-js`.
