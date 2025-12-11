@@ -40,6 +40,8 @@ export interface ConsumptionLog {
   quantityUsed: number;
   reason: 'cooked' | 'expired' | 'snack';
   dishName?: string;
+  unit?: string;
+  notes?: string;
 }
 
 export interface ScanResult {

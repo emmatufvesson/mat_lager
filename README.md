@@ -25,7 +25,24 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - Supabase används för backend: tabeller och RLS-polices ligger på plats, och appen laddar inventariet via Supabase Realtime.
 - En enkel e-post/magic-link-inloggning är aktiverad (Supabase Auth). Inloggning krävs för att lägga till/ta bort varor.
 - `Scanner` + “lägg till vara” och borttagning uppdaterar nu Supabase `inventory_items` i stället för `localStorage`.
-- Gamla `localStorage`-mockar har plockats bort utom för konsumtionsloggar (som migreras i nästa steg).
+- Konsumtionsloggar skrivs och läses nu från Supabase (`consumption_logs`) inklusive realtime-uppdatering.
+- Ny manuell logg-modal gör det möjligt att lägga till förbrukning utan att gå via matlagningsflödet.
+
+## Snabb överblick för nya utvecklare
+
+- **Repoets syfte:** En matassistent byggd i Vite + React + Tailwind som använder Supabase (Postgres + Auth) och Google Gemini.
+- **Autentisering:** Magic-link via Supabase. Sätt `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` och `GEMINI_API_KEY` i `.env.local` innan du kör `npm run dev`.
+- **Databas:** Viktiga tabeller: `inventory_items`, `consumption_logs`, `cooking_sessions` (+ *_items), `recipes`, `meal_plan`, `shopping_list`, `profiles`. Se SQL-blocket i repo (Table editor → Run SQL → kör skriptet).
+- **Kolumner att dubbelkolla i `consumption_logs`:** `user_id uuid`, `logged_at timestamptz default now()`, `item_name text`, `quantity_used numeric`, `unit text`, `cost numeric`, `reason text`, `dish_name text`, `notes text`.
+- **Aktuella bildskärmar:** Lagerlistan, matlagning (drar av varor och loggar konsumtion), ekonomifliken (diagram + loggar), modal för manuell logg.
+- **Kända gnistor:** Inga automatiska tester ännu; inga serverless-funktioner deployade; historikvy/meal planning/shopping list orörd.
+
+## Nästa prioriterade steg
+
+1. **Historikvy med redigering** – Bygg `HistoryView` som återanvänder `consumption_logs` och kommande `cooking_sessions` för att visa detaljer och tillåta justeringar.
+2. **Matlagningssessioner** – Förfina `CookingView` så att en hel session sparas (med ingrediensrader) och kopplas ihop med loggarna.
+3. **README + scripts** – Extrahera Supabase-schema till versionerad SQL-fil och länka här, uppdatera dokumentation när nya tabeller/kolumner tillkommer.
+4. **Testning** – Sätt upp Jest + React Testing Library och skriv baslinjetester (auth, lager, loggning).
 
 ## Rekommenderade molntjänster och setup
 

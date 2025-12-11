@@ -5,9 +5,20 @@ import { ConsumptionLog } from '../types';
 interface Props {
   logs: ConsumptionLog[];
   inventoryValue: number;
+  onAddLogClick?: () => void;
 }
 
-const StatsView: React.FC<Props> = ({ logs, inventoryValue }) => {
+const StatsView: React.FC<Props> = ({ logs, inventoryValue, onAddLogClick }) => {
+  const getReasonLabel = (reason: ConsumptionLog['reason']) => {
+    switch (reason) {
+      case 'cooked':
+        return 'Matlagning';
+      case 'expired':
+        return 'Utgånget';
+      default:
+        return 'Annat';
+    }
+  };
   // Aggregate costs by date (last 7 days for demo simplicity)
   const getChartData = () => {
     const data: Record<string, number> = {};
@@ -66,13 +77,23 @@ const StatsView: React.FC<Props> = ({ logs, inventoryValue }) => {
       </div>
 
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Senaste händelser</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-800">Senaste händelser</h3>
+          {onAddLogClick && (
+            <button
+              onClick={onAddLogClick}
+              className="text-sm font-medium text-emerald-600 hover:text-emerald-500"
+            >
+              Lägg till logg
+            </button>
+          )}
+        </div>
         <div className="space-y-4">
           {logs.slice().reverse().slice(0, 5).map(log => (
             <div key={log.id} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
               <div>
                 <p className="font-medium text-gray-800">{log.dishName || log.itemName}</p>
-                <p className="text-gray-500 text-xs">{new Date(log.date).toLocaleDateString()} - {log.reason === 'cooked' ? 'Matlagning' : 'Annat'}</p>
+                <p className="text-gray-500 text-xs">{new Date(log.date).toLocaleDateString()} - {getReasonLabel(log.reason)}</p>
               </div>
               <span className="font-medium text-gray-600">-{Math.round(log.cost)} kr</span>
             </div>

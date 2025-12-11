@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import React, { useState } from 'react';
 import InventoryView from './components/InventoryView';
 import Scanner from './components/Scanner';
 import CookingView from './components/CookingView';
@@ -9,14 +8,13 @@ import { InventoryItem, ConsumptionLog, DeductionSuggestion } from './types';
 import { supabase } from './services/supabaseClient';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useInventory } from './hooks/useInventory';
+import { useConsumptionLogs } from './hooks/useConsumptionLogs';
+import ManualConsumptionLogModal from './components/ManualConsumptionLogModal';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'cook' | 'stats' | 'recipes'>('inventory');
   const [showScanner, setShowScanner] = useState(false);
-  const [logs, setLogs] = useState<ConsumptionLog[]>(() => {
-    const saved = localStorage.getItem('logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [showManualLogModal, setShowManualLogModal] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
@@ -31,10 +29,12 @@ const App: React.FC = () => {
     error: inventoryError,
     refresh: refreshInventory
   } = useInventory(userId);
-
-  useEffect(() => {
-    localStorage.setItem('logs', JSON.stringify(logs));
-  }, [logs]);
+  const {
+    logs,
+    loading: logsLoading,
+    error: logsError,
+    addLog
+  } = useConsumptionLogs(userId);
 
   const handleEmailLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -117,7 +117,7 @@ const App: React.FC = () => {
   const handleDeduction = async (suggestions: DeductionSuggestion[], dishName: string) => {
     if (!userId) return;
 
-    const newLogs: ConsumptionLog[] = [];
+    const logEntries: Omit<ConsumptionLog, 'id'>[] = [];
 
     for (const suggestion of suggestions) {
       const item = inventory.find(i => i.id === suggestion.itemId);
@@ -129,14 +129,14 @@ const App: React.FC = () => {
         costUsed = item.priceInfo * ratio;
       }
 
-      newLogs.push({
-        id: uuidv4(),
+      logEntries.push({
         date: new Date().toISOString(),
         itemName: item.name,
         cost: costUsed,
         quantityUsed: suggestion.deductAmount,
         reason: 'cooked',
-        dishName
+        dishName,
+        unit: item.unit
       });
 
       const newQty = item.quantity - suggestion.deductAmount;
@@ -168,8 +168,19 @@ const App: React.FC = () => {
 
     setGlobalError(null);
     await refreshInventory();
-    setLogs(prev => [...prev, ...newLogs]);
+    try {
+      for (const logEntry of logEntries) {
+        await addLog(logEntry);
+      }
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Kunde inte spara förbrukningslogg.');
+      return;
+    }
     setActiveTab('inventory');
+  };
+
+  const handleManualLog = async (log: Omit<ConsumptionLog, 'id'>) => {
+    await addLog(log);
   };
 
   // Calculate total inventory value
@@ -257,6 +268,11 @@ const App: React.FC = () => {
             {inventoryError}
           </div>
         )}
+        {logsError && (
+          <div className="mx-4 my-3 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {logsError}
+          </div>
+        )}
         {inventoryLoading ? (
           <div className="flex items-center justify-center py-16 text-gray-500">
             Hämtar lagret...
@@ -273,7 +289,17 @@ const App: React.FC = () => {
               <CookingView inventory={inventory} onConfirmDeduction={handleDeduction} />
             )}
             {activeTab === 'stats' && (
-              <StatsView logs={logs} inventoryValue={inventoryValue} />
+              logsLoading ? (
+                <div className="flex items-center justify-center py-16 text-gray-500">
+                  Hämtar historik...
+                </div>
+              ) : (
+                <StatsView
+                  logs={logs}
+                  inventoryValue={inventoryValue}
+                  onAddLogClick={() => setShowManualLogModal(true)}
+                />
+              )
             )}
           </>
         )}
@@ -332,6 +358,11 @@ const App: React.FC = () => {
           onClose={() => setShowScanner(false)}
         />
       )}
+      <ManualConsumptionLogModal
+        isOpen={showManualLogModal}
+        onClose={() => setShowManualLogModal(false)}
+        onSubmit={handleManualLog}
+      />
     </div>
   );
 };
