@@ -67,3 +67,22 @@ export interface Recipe {
   instructions: string[];
   cookTime: string;
 }
+
+export interface CookingSession {
+  id: string;
+  userId: string;
+  dishName: string;
+  createdAt: string;
+  totalCost: number;
+  notes?: string;
+  items: CookingSessionItem[];
+}
+
+export interface CookingSessionItem {
+  id: string;
+  sessionId: string;
+  itemName: string;
+  quantityUsed: number;
+  unit: string;
+  cost: number;
+}

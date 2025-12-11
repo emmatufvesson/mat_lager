@@ -5,20 +5,35 @@ interface ManualConsumptionLogModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (log: Omit<ConsumptionLog, 'id'>) => Promise<void>;
+  initialValues?: ConsumptionLog;
 }
 
 const defaultDate = () => new Date().toISOString().slice(0, 16);
 
-const ManualConsumptionLogModal: React.FC<ManualConsumptionLogModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [formValues, setFormValues] = useState<Omit<ConsumptionLog, 'id'>>({
-    date: new Date().toISOString(),
-    itemName: '',
-    cost: 0,
-    quantityUsed: 0,
-    reason: 'snack',
-    dishName: undefined,
-    unit: undefined,
-    notes: undefined
+const ManualConsumptionLogModal: React.FC<ManualConsumptionLogModalProps> = ({ isOpen, onClose, onSubmit, initialValues }) => {
+  const [formValues, setFormValues] = useState<Omit<ConsumptionLog, 'id'>>(() => {
+    if (initialValues) {
+      return {
+        date: initialValues.date,
+        itemName: initialValues.itemName,
+        cost: initialValues.cost,
+        quantityUsed: initialValues.quantityUsed,
+        reason: initialValues.reason,
+        dishName: initialValues.dishName,
+        unit: initialValues.unit,
+        notes: initialValues.notes
+      };
+    }
+    return {
+      date: new Date().toISOString(),
+      itemName: '',
+      cost: 0,
+      quantityUsed: 0,
+      reason: 'snack',
+      dishName: undefined,
+      unit: undefined,
+      notes: undefined
+    };
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +63,16 @@ const ManualConsumptionLogModal: React.FC<ManualConsumptionLogModalProps> = ({ i
         date: formValues.date || new Date().toISOString()
       });
       onClose();
-      setFormValues(prev => ({ ...prev, itemName: '', cost: 0, quantityUsed: 0, notes: undefined, dishName: undefined }));
+      setFormValues({
+        date: new Date().toISOString(),
+        itemName: '',
+        cost: 0,
+        quantityUsed: 0,
+        reason: 'snack',
+        dishName: undefined,
+        unit: undefined,
+        notes: undefined
+      });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Kunde inte spara.');
     }
@@ -59,7 +83,7 @@ const ManualConsumptionLogModal: React.FC<ManualConsumptionLogModalProps> = ({ i
     <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">Logga förbrukning</h2>
+          <h2 className="text-lg font-semibold text-gray-800">{initialValues ? 'Redigera logg' : 'Logga förbrukning'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
         <form className="space-y-3" onSubmit={handleSubmit}>
@@ -67,7 +91,7 @@ const ManualConsumptionLogModal: React.FC<ManualConsumptionLogModalProps> = ({ i
             Datum & tid
             <input
               type="datetime-local"
-              defaultValue={defaultDate()}
+              defaultValue={initialValues ? new Date(initialValues.date).toISOString().slice(0, 16) : defaultDate()}
               onChange={event => handleChange('date', new Date(event.target.value).toISOString())}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               required

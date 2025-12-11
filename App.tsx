@@ -4,15 +4,17 @@ import Scanner from './components/Scanner';
 import CookingView from './components/CookingView';
 import StatsView from './components/StatsView';
 import RecipeView from './components/RecipeView';
-import { InventoryItem, ConsumptionLog, DeductionSuggestion } from './types';
+import HistoryView from './components/HistoryView';
+import { InventoryItem, ConsumptionLog, DeductionSuggestion, CookingSessionItem } from './types';
 import { supabase } from './services/supabaseClient';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useInventory } from './hooks/useInventory';
 import { useConsumptionLogs } from './hooks/useConsumptionLogs';
 import ManualConsumptionLogModal from './components/ManualConsumptionLogModal';
+import { useCookingSessions } from './hooks/useCookingSessions';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'cook' | 'stats' | 'recipes'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'cook' | 'stats' | 'recipes' | 'history'>('inventory');
   const [showScanner, setShowScanner] = useState(false);
   const [showManualLogModal, setShowManualLogModal] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -35,6 +37,11 @@ const App: React.FC = () => {
     error: logsError,
     addLog
   } = useConsumptionLogs(userId);
+  const {
+    createSession,
+    addSessionItem,
+    error: sessionError
+  } = useCookingSessions(userId);
 
   const handleEmailLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -117,66 +124,90 @@ const App: React.FC = () => {
   const handleDeduction = async (suggestions: DeductionSuggestion[], dishName: string) => {
     if (!userId) return;
 
-    const logEntries: Omit<ConsumptionLog, 'id'>[] = [];
+    try {
+      // Calculate total cost
+      let totalCost = 0;
+      const sessionItems: Omit<CookingSessionItem, 'id'>[] = [];
+      const logEntries: Omit<ConsumptionLog, 'id'>[] = [];
 
-    for (const suggestion of suggestions) {
-      const item = inventory.find(i => i.id === suggestion.itemId);
-      if (!item) continue;
+      for (const suggestion of suggestions) {
+        const item = inventory.find(i => i.id === suggestion.itemId);
+        if (!item) continue;
 
-      let costUsed = 0;
-      if (item.priceInfo) {
-        const ratio = suggestion.deductAmount / item.quantity;
-        costUsed = item.priceInfo * ratio;
+        let costUsed = 0;
+        if (item.priceInfo) {
+          const ratio = suggestion.deductAmount / item.quantity;
+          costUsed = item.priceInfo * ratio;
+        }
+        totalCost += costUsed;
+
+        sessionItems.push({
+          sessionId: '', // Will be set after session creation
+          itemName: item.name,
+          quantityUsed: suggestion.deductAmount,
+          unit: item.unit,
+          cost: costUsed,
+        });
+
+        logEntries.push({
+          date: new Date().toISOString(),
+          itemName: item.name,
+          cost: costUsed,
+          quantityUsed: suggestion.deductAmount,
+          reason: 'cooked',
+          dishName,
+          unit: item.unit,
+        });
       }
 
-      logEntries.push({
-        date: new Date().toISOString(),
-        itemName: item.name,
-        cost: costUsed,
-        quantityUsed: suggestion.deductAmount,
-        reason: 'cooked',
+      // Create session
+      const sessionId = await createSession({
+        userId,
         dishName,
-        unit: item.unit
+        totalCost,
       });
 
-      const newQty = item.quantity - suggestion.deductAmount;
-      if (newQty <= 0) {
-        const { error } = await supabase
-          .from('inventory_items')
-          .delete()
-          .eq('id', item.id)
-          .eq('user_id', userId);
-        if (error) {
-          setGlobalError(error.message);
-          return;
-        }
-      } else {
-        const { error } = await supabase
-          .from('inventory_items')
-          .update({
-            quantity: newQty,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', item.id)
-          .eq('user_id', userId);
-        if (error) {
-          setGlobalError(error.message);
-          return;
+      // Add session items
+      for (const item of sessionItems) {
+        await addSessionItem({ ...item, sessionId });
+      }
+
+      // Update inventory
+      for (const suggestion of suggestions) {
+        const item = inventory.find(i => i.id === suggestion.itemId);
+        if (!item) continue;
+
+        const newQty = item.quantity - suggestion.deductAmount;
+        if (newQty <= 0) {
+          const { error } = await supabase
+            .from('inventory_items')
+            .delete()
+            .eq('id', item.id)
+            .eq('user_id', userId);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('inventory_items')
+            .update({
+              quantity: newQty,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.id)
+            .eq('user_id', userId);
+          if (error) throw error;
         }
       }
-    }
 
-    setGlobalError(null);
-    await refreshInventory();
-    try {
+      // Add consumption logs
       for (const logEntry of logEntries) {
         await addLog(logEntry);
       }
+
+      await refreshInventory();
+      setActiveTab('inventory');
     } catch (error) {
-      setGlobalError(error instanceof Error ? error.message : 'Kunde inte spara förbrukningslogg.');
-      return;
+      setGlobalError(error instanceof Error ? error.message : 'Kunde inte spara matlagningssession.');
     }
-    setActiveTab('inventory');
   };
 
   const handleManualLog = async (log: Omit<ConsumptionLog, 'id'>) => {
@@ -285,6 +316,9 @@ const App: React.FC = () => {
             {activeTab === 'recipes' && (
               <RecipeView inventory={inventory} />
             )}
+            {activeTab === 'history' && (
+              <HistoryView userId={userId} />
+            )}
             {activeTab === 'cook' && (
               <CookingView inventory={inventory} onConfirmDeduction={handleDeduction} />
             )}
@@ -326,6 +360,16 @@ const App: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
             <span className="text-xs font-medium">Recept</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex flex-col items-center p-3 flex-1 ${activeTab === 'history' ? 'text-emerald-600' : 'text-gray-400'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-medium">Historik</span>
           </button>
           
           <button

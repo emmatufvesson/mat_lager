@@ -27,22 +27,23 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - `Scanner` + “lägg till vara” och borttagning uppdaterar nu Supabase `inventory_items` i stället för `localStorage`.
 - Konsumtionsloggar skrivs och läses nu från Supabase (`consumption_logs`) inklusive realtime-uppdatering.
 - Ny manuell logg-modal gör det möjligt att lägga till förbrukning utan att gå via matlagningsflödet.
+- Supabase-schema är nu versionerat i [sql/supabase-schema.sql](sql/supabase-schema.sql).
+- Ny **Historikvy** (`HistoryView`) visar och tillåter redigering av konsumtionsloggar från Supabase.
+- Matlagningssessioner sparas nu som `cooking_sessions` med tillhörande `cooking_session_items` för detaljerad spårning.
 
 ## Snabb överblick för nya utvecklare
 
 - **Repoets syfte:** En matassistent byggd i Vite + React + Tailwind som använder Supabase (Postgres + Auth) och Google Gemini.
 - **Autentisering:** Magic-link via Supabase. Sätt `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` och `GEMINI_API_KEY` i `.env.local` innan du kör `npm run dev`.
-- **Databas:** Viktiga tabeller: `inventory_items`, `consumption_logs`, `cooking_sessions` (+ *_items), `recipes`, `meal_plan`, `shopping_list`, `profiles`. Se SQL-blocket i repo (Table editor → Run SQL → kör skriptet).
+- **Databas:** Viktiga tabeller: `inventory_items`, `consumption_logs`, `cooking_sessions` (+ *_items), `recipes`, `meal_plan`, `shopping_list`, `profiles`. Se [sql/supabase-schema.sql](sql/supabase-schema.sql) för komplett schema (kör i Supabase SQL Editor).
 - **Kolumner att dubbelkolla i `consumption_logs`:** `user_id uuid`, `logged_at timestamptz default now()`, `item_name text`, `quantity_used numeric`, `unit text`, `cost numeric`, `reason text`, `dish_name text`, `notes text`.
-- **Aktuella bildskärmar:** Lagerlistan, matlagning (drar av varor och loggar konsumtion), ekonomifliken (diagram + loggar), modal för manuell logg.
+- **Aktuella bildskärmar:** Lagerlistan, matlagning (sparar sessioner med items), ekonomifliken (diagram + loggar), modal för manuell logg, historikvy (visa/redigera loggar och sessioner).
 - **Kända gnistor:** Inga automatiska tester ännu; inga serverless-funktioner deployade; historikvy/meal planning/shopping list orörd.
 
 ## Nästa prioriterade steg
 
-1. **Historikvy med redigering** – Bygg `HistoryView` som återanvänder `consumption_logs` och kommande `cooking_sessions` för att visa detaljer och tillåta justeringar.
-2. **Matlagningssessioner** – Förfina `CookingView` så att en hel session sparas (med ingrediensrader) och kopplas ihop med loggarna.
-3. **README + scripts** – Extrahera Supabase-schema till versionerad SQL-fil och länka här, uppdatera dokumentation när nya tabeller/kolumner tillkommer.
-4. **Testning** – Sätt upp Jest + React Testing Library och skriv baslinjetester (auth, lager, loggning).
+1. **README + scripts** – Håll [sql/supabase-schema.sql](sql/supabase-schema.sql) uppdaterad när nya tabeller/kolumner tillkommer; lägg till migrationsskript för framtida schemaändringar.
+3. **Testning** – Sätt upp Jest + React Testing Library och skriv baslinjetester (auth, lager, loggning).
 
 ## Rekommenderade molntjänster och setup
 
@@ -60,7 +61,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - **Databas + Auth – Supabase (gratisnivå)**
   - Skapa projekt på https://supabase.com, välj region nära dig.
   - Aktivera Email + Magic Link auth.
-   - Skapa tabeller: `inventory_items`, `cooking_sessions`, `cooking_session_items`, `consumption_logs`, `recipes`, `recipe_ingredients`, `meal_plan`, `shopping_list`, `shopping_list_items`, `profiles` (SQL-block finns i repo). 
+  - Skapa tabeller genom att köra [sql/supabase-schema.sql](sql/supabase-schema.sql) i Supabase SQL Editor. 
   - I Supabase dashboard -> Project Settings -> API: kopiera `SUPABASE_URL` och `SUPABASE_ANON_KEY`.
    - Lägg env-variabler i Vercel (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) och i lokal `.env.local`.
   - Installera klient: `npm install @supabase/supabase-js`.
@@ -104,17 +105,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
    - Migrera `localStorage` till Supabase-tabeller.
    - Skapa hooks (`useInventory`, `useMealPlan`, `useRecipes`, `useShoppingList`).
 
-2. **Matlagningssession med redigering**
-   - Introducera typ `CookingSession` (ingredienser, kvantiteter, kostnadsberäkning).
-   - Bygg modal/overlay där användaren kan lägga till/ta bort/ändra mängder innan lager uppdateras.
-   - Spara sessionen i Supabase och koppla till `consumption_logs`.
-
-3. **Historikvy med redigering**
-   - Skapa ny komponent `HistoryView`.
-   - Läs `consumption_logs` + `cooking_session_items`.
-   - Tillåt redigering (samma formulär som ovan), skriv tillbaka justeringar och rejustera lager.
-
-4. **Importera lagad rätt till recept**
+2. **Importera lagad rätt till recept**
    - Lägg knapp “Spara som recept” i historikdetalj.
    - Skapa `Recipe` från logg (titel, ingredienser, instruktioner).
    - Spara i `recipes`, koppla `source_log_id` för spårning.
