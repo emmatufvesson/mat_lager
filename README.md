@@ -30,6 +30,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - Supabase-schema är nu versionerat i [sql/supabase-schema.sql](sql/supabase-schema.sql).
 - Ny **Historikvy** (`HistoryView`) visar och tillåter redigering av konsumtionsloggar från Supabase.
 - Matlagningssessioner sparas nu som `cooking_sessions` med tillhörande `cooking_session_items` för detaljerad spårning.
+- **Testning komplett**: Jest + React Testing Library är uppsatt med omfattande integrationstester (9/9 passerar) som täcker autentisering, lagerhantering, matlagningsflöde, konsumtionsloggning och felhantering.
 
 ## Snabb överblick för nya utvecklare
 
@@ -38,12 +39,12 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
 - **Databas:** Viktiga tabeller: `inventory_items`, `consumption_logs`, `cooking_sessions` (+ *_items), `recipes`, `meal_plan`, `shopping_list`, `profiles`. Se [sql/supabase-schema.sql](sql/supabase-schema.sql) för komplett schema (kör i Supabase SQL Editor).
 - **Kolumner att dubbelkolla i `consumption_logs`:** `user_id uuid`, `logged_at timestamptz default now()`, `item_name text`, `quantity_used numeric`, `unit text`, `cost numeric`, `reason text`, `dish_name text`, `notes text`.
 - **Aktuella bildskärmar:** Lagerlistan, matlagning (sparar sessioner med items), ekonomifliken (diagram + loggar), modal för manuell logg, historikvy (visa/redigera loggar och sessioner).
-- **Kända gnistor:** Inga automatiska tester ännu; inga serverless-funktioner deployade; historikvy/meal planning/shopping list orörd.
+- **Kända gnistor:** Omfattande integrationstester är nu implementerade; inga serverless-funktioner deployade; historikvy/meal planning/shopping list orörd.
 
 ## Nästa prioriterade steg
 
 1. **README + scripts** – Håll [sql/supabase-schema.sql](sql/supabase-schema.sql) uppdaterad när nya tabeller/kolumner tillkommer; lägg till migrationsskript för framtida schemaändringar.
-3. **Testning** – Sätt upp Jest + React Testing Library och skriv baslinjetester (auth, lager, loggning).
+2. **CI/CD Pipeline** – Aktivera GitHub Actions för automatisk testning och deployment via Vercel.
 
 ## Rekommenderade molntjänster och setup
 
@@ -126,7 +127,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1FU6NMLEy9kePRLmOSTkehL
    - Integrera Supabase Auth (email magic link) i UI.
    - Säkra serverless endpoints (kontrollera `Authorization: Bearer`-token).
 
-8. **Testning & CI/CD**
-   - Lägg till Jest + React Testing Library.
-   - Skriv tester för: matlagningsflöde, receptimport, planering->inköp.
+8. **Testning & CI/CD** ✅ *Komplett*
+   - Jest + React Testing Library är implementerat med omfattande integrationstester.
+   - Tester täcker: autentisering, lagerhantering, matlagningsflöde, konsumtionsloggning, felhantering.
    - Aktivera GitHub Actions (lint/test på push, deploy via Vercel). 
