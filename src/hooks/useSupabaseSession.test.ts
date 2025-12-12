@@ -21,8 +21,8 @@ describe('useSupabaseSession', () => {
   });
 
   it('should return initializing true initially', () => {
-    mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } });
-    mockSupabase.auth.onAuthStateChange.mockReturnValue({
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: null } });
+    (mockSupabase.auth.onAuthStateChange as jest.Mock).mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
     });
 
@@ -34,8 +34,8 @@ describe('useSupabaseSession', () => {
 
   it('should set session and initializing false after getSession resolves', async () => {
     const mockSession = { user: { id: '123' } };
-    mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } });
-    mockSupabase.auth.onAuthStateChange.mockReturnValue({
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: mockSession } });
+    (mockSupabase.auth.onAuthStateChange as jest.Mock).mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
     });
 
@@ -50,10 +50,10 @@ describe('useSupabaseSession', () => {
 
   it('should update session on auth state change', async () => {
     const mockSession = { user: { id: '123' } };
-    mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({ data: { session: null } });
 
     const mockListener = jest.fn();
-    mockSupabase.auth.onAuthStateChange.mockImplementation((callback) => {
+    (mockSupabase.auth.onAuthStateChange as jest.Mock).mockImplementation((callback) => {
       mockListener.mockImplementation(callback);
       return {
         data: { subscription: { unsubscribe: jest.fn() } },

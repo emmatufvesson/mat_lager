@@ -84,7 +84,19 @@ describe('App Integration Tests', () => {
   it('renders app with inventory tab after authentication', async () => {
     // Set up authenticated state
     mockUseSupabaseSession.mockReturnValue({
-      session: { user: { id: 'test-user-id', email: 'test@example.com' } },
+      session: { 
+        user: {
+          id: 'test-user-id', email: 'test@example.com',
+          app_metadata: undefined,
+          user_metadata: undefined,
+          aud: '',
+          created_at: ''
+        },
+        access_token: 'token',
+        refresh_token: 'refresh',
+        expires_in: 3600,
+        token_type: 'bearer'
+      },
       initializing: false
     });
 

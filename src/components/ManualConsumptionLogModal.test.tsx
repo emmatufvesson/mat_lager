@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ManualConsumptionLogModal from '../../components/ManualConsumptionLogModal';
-import type { ConsumptionLog } from '../types';
+import type { ConsumptionLog } from '../../types';
 
 const mockOnClose = jest.fn();
 const mockOnSubmit = jest.fn();
