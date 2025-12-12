@@ -54,10 +54,14 @@ const App: React.FC = () => {
     }
 
     setIsSendingLink(true);
+    const redirectUrl = import.meta.env.PROD 
+      ? 'https://mat-lager-fv1cj4uc5-emmatufvessons-projects.vercel.app'
+      : window.location.origin;
+    
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: redirectUrl
       }
     });
     setIsSendingLink(false);
