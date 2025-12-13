@@ -1,7 +1,0 @@
-{
-  "name": "mat_lager",
-  "description": "En smart matassistent som hjälper dig spåra ditt skafferi, scanna kvitton, minska matsvinn och hålla koll på matkostnader med hjälp av AI.",
-  "requestFramePermissions": [
-    "camera"
-  ]
-}
